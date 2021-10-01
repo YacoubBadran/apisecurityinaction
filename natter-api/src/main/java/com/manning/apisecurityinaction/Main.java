@@ -8,6 +8,7 @@ import org.dalesbred.result.EmptyResultException;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.json.*;
 import spark.*;
+import com.manning.apisecurityinaction.DAL.*;
 
 import static spark.Spark.*;
 
@@ -22,7 +23,9 @@ public class Main {
             "jdbc:h2:mem:natter", "natter_api_user", "password");
 
         database = Database.forDataSource(datasource);
-        var spaceController = new SpaceController(database);
+        var messenger = new Messenger(database);
+
+        var spaceController = new SpaceController(messenger);
 
         before(((request, response) -> {
             if (request.requestMethod().equals("POST") &&
@@ -53,7 +56,7 @@ public class Main {
         get("/spaces/:spaceId/messages", spaceController::findMessages);
 
         var moderatorController =
-            new ModeratorController(database);
+            new ModeratorController(messenger);
         delete("/spaces/:spaceId/messages/:msgId",
             moderatorController::deletePost);
 

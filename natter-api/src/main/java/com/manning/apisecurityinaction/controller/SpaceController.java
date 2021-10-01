@@ -6,15 +6,16 @@ import java.util.stream.Collectors;
 
 import org.dalesbred.Database;
 import org.json.*;
+import com.manning.apisecurityinaction.DAL.*;
 
 import spark.*;
 
 public class SpaceController {
 
-  private final Database database;
+  private Messenger messenger;
 
-  public SpaceController(Database database) {
-    this.database = database;
+  public SpaceController(Messenger messenger) {
+    this.messenger = messenger;
   }
 
   public JSONObject createSpace(Request request, Response response) {
@@ -58,30 +59,19 @@ public class SpaceController {
       throw new IllegalArgumentException("message is too long");
     }
 
-    return database.withTransaction(tx -> {
-      var msgId = database.findUniqueLong(
-          "SELECT NEXT VALUE FOR msg_id_seq;");
-      database.updateUnique(
-          "INSERT INTO messages(space_id, msg_id, msg_time," +
-              "author, msg_text) " +
-              "VALUES(?, ?, current_timestamp, ?, ?)",
-          spaceId, msgId, user, message);
+    messenger.InsertMessage(spaceId, user, message);
 
-      response.status(201);
-      var uri = "/spaces/" + spaceId + "/messages/" + msgId;
-      response.header("Location", uri);
-      return new JSONObject().put("uri", uri);
-    });
+    response.status(201);
+    var uri = "/spaces/" + spaceId + "/messages/" + msgId;
+    response.header("Location", uri);
+    return new JSONObject().put("uri", uri);
   }
 
   public Message readMessage(Request request, Response response) {
     var spaceId = Long.parseLong(request.params(":spaceId"));
     var msgId = Long.parseLong(request.params(":msgId"));
 
-    var message = database.findUnique(Message.class,
-        "SELECT space_id, msg_id, author, msg_time, msg_text " +
-            "FROM messages WHERE msg_id = ? AND space_id = ?",
-        msgId, spaceId);
+    var message = messenger.FindMessage(msgId, spaceId);
 
     response.status(200);
     return message;
@@ -103,32 +93,5 @@ public class SpaceController {
     return new JSONArray(messages.stream()
         .map(msgId -> "/spaces/" + spaceId + "/messages/" + msgId)
         .collect(Collectors.toList()));
-  }
-
-  public static class Message {
-    private final long spaceId;
-    private final long msgId;
-    private final String author;
-    private final Instant time;
-    private final String message;
-
-    public Message(long spaceId, long msgId, String author,
-        Instant time, String message) {
-      this.spaceId = spaceId;
-      this.msgId = msgId;
-      this.author = author;
-      this.time = time;
-      this.message = message;
-    }
-    @Override
-    public String toString() {
-      JSONObject msg = new JSONObject();
-      msg.put("uri",
-          "/spaces/" + spaceId + "/messages/" + msgId);
-      msg.put("author", author);
-      msg.put("time", time.toString());
-      msg.put("message", message);
-      return msg.toString();
-    }
   }
 }
